@@ -70,16 +70,17 @@ impl<T> AsMut<T> for Box<T> {
 mod test {
     use super::*;
     use core::mem::MaybeUninit;
-    use std::sync::Once;
-
-    static INIT_LVGL: Once = Once::new();
 
     fn init() {
-        INIT_LVGL.call_once(|| {
-            unsafe {
-                lvgl_sys::lv_init();
-            };
-        });
+        unsafe {
+            lvgl_sys::lv_init();
+        };
+    }
+
+    fn teardown() {
+        unsafe {
+            lvgl_sys::lv_deinit();
+        }
     }
 
     #[test]
@@ -90,6 +91,8 @@ mod test {
         drop(v);
         let v = Box::new(10).unwrap();
         drop(v);
+
+        teardown();
     }
 
     #[test]
@@ -129,6 +132,8 @@ mod test {
             }
             assert_eq!(point.x, i);
         }
+
+        teardown();
     }
 
     fn print_mem_info() {

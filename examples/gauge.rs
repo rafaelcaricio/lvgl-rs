@@ -6,14 +6,11 @@ use embedded_graphics_simulator::{
 use lvgl::style::{Opacity, Style};
 use lvgl::widgets::Gauge;
 use lvgl::{self, Align, Color, LvError, Part, State, Widget, UI};
-use lvgl_sys;
 use std::time::Instant;
 
 fn main() -> Result<(), LvError> {
-    let display: SimulatorDisplay<Rgb565> = SimulatorDisplay::new(Size::new(
-        lvgl_sys::LV_HOR_RES_MAX,
-        lvgl_sys::LV_VER_RES_MAX,
-    ));
+    let display: SimulatorDisplay<Rgb565> =
+        SimulatorDisplay::new(Size::new(lvgl::HOR_RES_MAX, lvgl::VER_RES_MAX));
 
     let output_settings = OutputSettingsBuilder::new().scale(2).build();
     let mut window = Window::new("Gauge Example", &output_settings);
@@ -36,7 +33,7 @@ fn main() -> Result<(), LvError> {
     gauge_style.set_radius(State::DEFAULT, 5);
     gauge_style.set_bg_opa(State::DEFAULT, Opacity::OPA_COVER);
     gauge_style.set_bg_color(State::DEFAULT, Color::from_rgb((192, 192, 192)));
-    // Set some paddings
+    // Set some padding's
     gauge_style.set_pad_inner(State::DEFAULT, 20);
     gauge_style.set_pad_top(State::DEFAULT, 20);
     gauge_style.set_pad_left(State::DEFAULT, 5);

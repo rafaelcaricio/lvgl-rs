@@ -13,10 +13,8 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 fn main() -> Result<(), LvError> {
-    let display: SimulatorDisplay<Rgb565> = SimulatorDisplay::new(Size::new(
-        lvgl_sys::LV_HOR_RES_MAX,
-        lvgl_sys::LV_VER_RES_MAX,
-    ));
+    let display: SimulatorDisplay<Rgb565> =
+        SimulatorDisplay::new(Size::new(lvgl::HOR_RES_MAX, lvgl::VER_RES_MAX));
 
     let output_settings = OutputSettingsBuilder::new().scale(2).build();
     let mut window = Window::new("PineTime", &output_settings);

@@ -14,6 +14,10 @@ heapless = "0.5.5"
 cstr_core = { version = "0.2.0", features = ["alloc"] }
 
 [[example]]
+name = "simple"
+path = "simple.rs"
+
+[[example]]
 name = "demo"
 path = "demo.rs"
 
