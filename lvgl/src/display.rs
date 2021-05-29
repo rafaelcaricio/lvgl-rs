@@ -11,6 +11,7 @@ const REFRESH_BUFFER_LEN: usize = 2;
 // Declare a buffer for the refresh rate
 pub(crate) const BUF_SIZE: usize = lvgl_sys::LV_HOR_RES_MAX as usize * REFRESH_BUFFER_LEN;
 
+#[derive(Debug, Copy, Clone)]
 pub enum DisplayError {
     FailedToRegister,
     NotRegistered,
@@ -61,67 +62,64 @@ impl DisplayBuffer {
 }
 
 #[derive(Copy, Clone)]
-pub struct DisplayDriver<C>
+pub struct DisplayDriver<T, C>
 where
+    T: DrawTarget<C>,
     C: PixelColor + From<Color>,
 {
     pub(crate) disp_drv: lvgl_sys::lv_disp_drv_t,
-    phantom: PhantomData<C>,
+    phantom_display: PhantomData<T>,
+    phantom_color: PhantomData<C>,
 }
 
-impl<C> DisplayDriver<C>
+impl<T, C> DisplayDriver<T, C>
 where
+    T: DrawTarget<C>,
     C: PixelColor + From<Color>,
 {
-    pub fn new<I, F>(display_buffer: DisplayBuffer, callback: F) -> Self
-    where
-        I: IntoIterator<Item = drawable::Pixel<C>>,
-        F: FnMut(I) + 'static,
-    {
+    pub fn new(display_buffer: DisplayBuffer, native_display: T) -> Self {
         let mut disp_buf = ManuallyDrop::new(display_buffer.disp_buf);
-        let mut callback = ManuallyDrop::new(callback);
+        let mut native_display = ManuallyDrop::new(DisplayUserData {
+            display: native_display,
+            phantom: PhantomData,
+        });
         let mut disp_drv = unsafe {
             let mut disp_drv = MaybeUninit::uninit();
             lvgl_sys::lv_disp_drv_init(disp_drv.as_mut_ptr());
             disp_drv.assume_init()
         };
         disp_drv.buffer = &mut *disp_buf as *mut lvgl_sys::lv_disp_buf_t;
-        disp_drv.user_data = &mut callback as *mut _ as lvgl_sys::lv_disp_drv_user_data_t;
-        disp_drv.flush_cb = Some(disp_flush_trampoline::<C, I, F>);
+        disp_drv.user_data = &mut native_display as *mut _ as lvgl_sys::lv_disp_drv_user_data_t;
+        disp_drv.flush_cb = Some(disp_flush_trampoline::<T, C>);
 
         Self {
             disp_drv,
-            phantom: PhantomData,
+            phantom_color: PhantomData,
+            phantom_display: PhantomData,
         }
     }
 }
 
-// impl Default for DisplayDriver {
-//     fn default() -> Self {
-//         Self::new(DisplayBuffer::new())
-//     }
-// }
-
-pub struct DisplayDriverBuilder {
-    disp_buf: Option<DisplayBuffer>,
+pub(crate) struct DisplayUserData<T, C>
+where
+    T: DrawTarget<C>,
+    C: PixelColor + From<Color>,
+{
+    display: T,
+    phantom: PhantomData<C>,
 }
 
-impl DisplayDriverBuilder {
-    pub fn with_callback() {}
-}
-
-unsafe extern "C" fn disp_flush_trampoline<C, I, F>(
+unsafe extern "C" fn disp_flush_trampoline<T, C>(
     disp_drv: *mut lvgl_sys::lv_disp_drv_t,
     area: *const lvgl_sys::lv_area_t,
     color_p: *mut lvgl_sys::lv_color_t,
 ) where
+    T: DrawTarget<C>,
     C: PixelColor + From<Color>,
-    I: IntoIterator<Item = drawable::Pixel<C>>,
-    F: FnMut(I) + 'static,
 {
     let display_driver = *disp_drv;
     if !display_driver.user_data.is_null() {
-        let callback = &mut *(display_driver.user_data as *mut F);
+        let user_data = &mut *(display_driver.user_data as *mut DisplayUserData<T, C>);
         let x1 = (*area).x1;
         let x2 = (*area).x2;
         let y1 = (*area).y1;
@@ -140,11 +138,25 @@ unsafe extern "C" fn disp_flush_trampoline<C, I, F>(
                     let color_len = x_len * iy + ix;
                     let lv_color = unsafe { *color_p.add(color_len) };
                     let raw_color = Color::from_raw(lv_color);
-                    drawable::Pixel(Point::new(x as i32, y as i32), raw_color.into())
+                    drawable::Pixel::<C>(Point::new(x as i32, y as i32), raw_color.into())
                 })
             })
             .flatten();
 
-        callback(pixels);
+        let _ = user_data.display.draw_iter(pixels);
     }
+}
+
+// impl Default for DisplayDriver {
+//     fn default() -> Self {
+//         Self::new(DisplayBuffer::new())
+//     }
+// }
+
+pub struct DisplayDriverBuilder {
+    disp_buf: Option<DisplayBuffer>,
+}
+
+impl DisplayDriverBuilder {
+    pub fn with_callback() {}
 }
