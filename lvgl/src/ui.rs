@@ -1,7 +1,7 @@
 use crate::Box;
 use crate::{Color, Event, LvError, LvResult, Obj, Widget};
 use core::marker::PhantomData;
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -47,7 +47,7 @@ where
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            crate::lvgl_init();
+            crate::init();
             Ok(Self {
                 _not_sync: PhantomData,
                 display_data: None,
@@ -80,10 +80,13 @@ where
             // Basic initialization of the display driver
             lvgl_sys::lv_disp_drv_init(disp_drv.as_mut_ptr());
             let mut disp_drv = Box::new(disp_drv.assume_init());
-            // Assign the buffer to the display
+            // Assign the buffer to the display, the memory "leaks" here since
+            // the `disp_drv` is dropped in the end of this method. This is not a problem
+            // since this should live for the whole lifetime of the program anyways.
             disp_drv.buffer = Box::into_raw(Box::new(disp_buf.assume_init()));
             // Set your driver function
             disp_drv.flush_cb = Some(display_callback_wrapper::<T, C>);
+            // The memory of `display_data` is kept because of the reference in `self`
             disp_drv.user_data = &mut self.display_data as *mut _ as *mut cty::c_void;
             // We need to remember to deallocate the `disp_drv` memory when dropping UI
             lvgl_sys::lv_disp_drv_register(Box::into_raw(disp_drv));
@@ -110,7 +113,7 @@ where
         }
     }
 
-    pub fn event_send<W>(&mut self, obj: &mut W, event: Event<W::SpecialEvent>) -> LvResult<()>
+    pub fn event_send<W>(&self, obj: &mut W, event: Event<W::SpecialEvent>) -> LvResult<()>
     where
         W: Widget,
     {

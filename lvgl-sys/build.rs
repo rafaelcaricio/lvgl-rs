@@ -114,6 +114,7 @@ fn main() {
     let bindings = bindgen::Builder::default()
         .header(shims_dir.join("lvgl_sys.h").to_str().unwrap())
         .generate_comments(false)
+        .derive_default(true)
         .layout_tests(false)
         .use_core()
         .rustfmt_bindings(true)

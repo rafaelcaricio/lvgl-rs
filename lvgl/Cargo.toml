@@ -33,6 +33,11 @@ embedded-graphics-simulator = "0.2.1"
 heapless = "0.5.5"
 
 [[example]]
+name = "app"
+path = "../examples/app.rs"
+required-features = ["alloc"]
+
+[[example]]
 name = "demo"
 path = "../examples/demo.rs"
 required-features = ["alloc"]
