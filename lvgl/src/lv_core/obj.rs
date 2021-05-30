@@ -35,10 +35,7 @@ pub trait Widget: NativeObject {
 
     /// Construct an instance of the object from a raw pointer.
     ///
-    /// # Safety
-    /// Provided the LVGL library can allocate memory this should be safe.
-    ///
-    unsafe fn from_raw(raw_pointer: ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self;
+    fn from_raw(raw_pointer: ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self;
 
     fn add_style(&self, part: Self::Part, style: Style) -> LvResult<()> {
         unsafe {
@@ -104,7 +101,7 @@ impl Widget for Obj {
     type SpecialEvent = ();
     type Part = Part;
 
-    unsafe fn from_raw(raw: ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self {
+    fn from_raw(raw: ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self {
         Self { raw: raw.as_ptr() }
     }
 }
@@ -167,7 +164,7 @@ macro_rules! define_object {
             type SpecialEvent = $event_type;
             type Part = $part_type;
 
-            unsafe fn from_raw(raw_pointer: core::ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self {
+            fn from_raw(raw_pointer: core::ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self {
                 Self {
                     core: $crate::Obj::from_raw(raw_pointer),
                 }

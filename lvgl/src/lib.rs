@@ -17,6 +17,12 @@
 #[macro_use]
 extern crate bitflags;
 
+#[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
+mod lv_core;
+
 #[cfg(feature = "lvgl_alloc")]
 extern crate alloc;
 
@@ -31,14 +37,6 @@ use ::alloc::boxed::Box;
 #[cfg(feature = "lvgl_alloc")]
 mod allocator;
 
-pub mod display;
-mod functions;
-mod support;
-mod ui;
-#[macro_use]
-mod lv_core;
-pub mod widgets;
-
 #[cfg(not(feature = "lvgl_alloc"))]
 pub(crate) mod mem;
 
@@ -49,23 +47,51 @@ pub(crate) mod mem;
 #[cfg(not(feature = "lvgl_alloc"))]
 use crate::mem::Box;
 
+pub mod display;
+mod functions;
+mod support;
+mod ui;
+pub mod widgets;
+use core::sync::atomic::{AtomicBool, Ordering};
 pub use functions::*;
 pub use lv_core::*;
+use parking_lot::Mutex;
 pub use support::*;
 pub use ui::*;
 
-use core::sync::atomic::{AtomicBool, Ordering};
-
-// Initialize LVGL only once.
-static LVGL_INITIALIZED: AtomicBool = AtomicBool::new(false);
+lazy_static! {
+    static ref MUTEX: Mutex<AtomicBool> = Mutex::new(AtomicBool::new(false));
+}
 
 pub fn init() {
-    if LVGL_INITIALIZED
+    let initialized = MUTEX.lock();
+    if initialized
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
         .is_ok()
     {
         unsafe {
             lvgl_sys::lv_init();
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::display::Display;
+    use embedded_graphics::mock_display::MockDisplay;
+    use embedded_graphics::pixelcolor::Rgb565;
+
+    pub(crate) fn initialize_test() {
+        init();
+
+        static RUN_ONCE: Mutex<Option<u8>> = parking_lot::const_mutex(None);
+        let mut run_once = RUN_ONCE.lock();
+
+        if run_once.is_none() {
+            let embedded_graphics_display: MockDisplay<Rgb565> = Default::default();
+            let _ = Display::register(embedded_graphics_display).unwrap();
+            *run_once = Some(1);
         }
     }
 }

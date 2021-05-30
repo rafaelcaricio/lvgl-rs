@@ -2,7 +2,7 @@ use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, Window};
 use lvgl;
-use lvgl::display::{Display, DisplayBuffer, DisplayDriver};
+use lvgl::display::Display;
 
 type ColorSpace = Rgb565;
 
@@ -17,7 +17,5 @@ fn main() {
 
     // LVGL usage
     lvgl::init();
-
-    let mut display_diver = DisplayDriver::new(DisplayBuffer::new(), embedded_graphics_display);
-    let gui = lvgl::disp_drv_register(&mut display_diver).unwrap();
+    Display::register(embedded_graphics_display).unwrap();
 }

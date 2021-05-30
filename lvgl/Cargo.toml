@@ -17,6 +17,8 @@ cty = "0.2.1"
 embedded-graphics = "0.6.2"
 cstr_core = "0.2.3"
 bitflags = "1.2.1"
+parking_lot = "0.11.1"
+lazy_static = "1.4.0"
 
 [features]
 alloc = ["cstr_core/alloc"]
@@ -35,22 +37,18 @@ heapless = "0.5.5"
 [[example]]
 name = "app"
 path = "../examples/app.rs"
-required-features = ["alloc"]
 
 [[example]]
 name = "demo"
 path = "../examples/demo.rs"
-required-features = ["alloc"]
 
 [[example]]
 name = "bar"
 path = "../examples/bar.rs"
-required-features = ["alloc"]
 
 [[example]]
 name = "button_click"
 path = "../examples/button_click.rs"
-required-features = ["alloc"]
 
 [[example]]
 name = "gauge"
@@ -59,4 +57,3 @@ path = "../examples/gauge.rs"
 [[example]]
 name = "arc"
 path = "../examples/arc.rs"
-required-features = ["lvgl_alloc"]
