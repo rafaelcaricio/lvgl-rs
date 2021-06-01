@@ -16,9 +16,7 @@ type Result<T> = result::Result<T, CoreError>;
 pub fn disp_drv_register<C: PixelColor + From<Color>, T: DrawTarget<C>>(
     disp_drv: &mut DisplayDriver<T, C>,
 ) -> Result<Display> {
-    let disp_ptr = unsafe {
-        lvgl_sys::lv_disp_drv_register(&mut disp_drv.disp_drv as *mut lvgl_sys::lv_disp_drv_t)
-    };
+    let disp_ptr = unsafe { lvgl_sys::lv_disp_drv_register(disp_drv.disp_drv.as_mut() as *mut _) };
     Ok(Display::from_raw(
         NonNull::new(disp_ptr).ok_or(CoreError::OperationFailed)?,
     ))
