@@ -1,6 +1,7 @@
 use crate::display::{Display, DisplayDriver};
 use crate::{Color, Obj, Widget};
 use core::ptr::NonNull;
+use core::time::Duration;
 use core::{ptr, result};
 use embedded_graphics::prelude::*;
 
@@ -16,7 +17,7 @@ type Result<T> = result::Result<T, CoreError>;
 pub fn disp_drv_register<C: PixelColor + From<Color>, T: DrawTarget<C>>(
     disp_drv: &mut DisplayDriver<T, C>,
 ) -> Result<Display> {
-    let disp_ptr = unsafe { lvgl_sys::lv_disp_drv_register(disp_drv.disp_drv.as_mut() as *mut _) };
+    let disp_ptr = unsafe { lvgl_sys::lv_disp_drv_register(&mut disp_drv.disp_drv as *mut _) };
     Ok(Display::from_raw(
         NonNull::new(disp_ptr).ok_or(CoreError::OperationFailed)?,
     ))
@@ -39,4 +40,17 @@ pub(crate) fn get_str_act(disp: Option<&Display>) -> Result<Obj> {
     Ok(Obj::from_raw(
         NonNull::new(scr_ptr).ok_or(CoreError::ResourceNotAvailable)?,
     ))
+}
+
+pub fn tick_inc(tick_period: Duration) {
+    unsafe {
+        lvgl_sys::lv_tick_inc(tick_period.as_millis() as u32);
+    }
+}
+
+/// Call it periodically to handle tasks.
+/// Returns the duration after which it must be called again.
+pub fn task_handler() -> Option<Duration> {
+    let next_call_at = unsafe { lvgl_sys::lv_task_handler() };
+    Some(Duration::from_secs(next_call_at as u64))
 }
