@@ -37,9 +37,13 @@ pub trait Widget: NativeObject {
     ///
     fn from_raw(raw_pointer: ptr::NonNull<lvgl_sys::lv_obj_t>) -> Self;
 
-    fn add_style(&self, part: Self::Part, style: Style) -> LvResult<()> {
+    fn add_style(&self, part: Self::Part, style: &mut Style) -> LvResult<()> {
         unsafe {
-            lvgl_sys::lv_obj_add_style(self.raw()?.as_mut(), part.into(), Box::into_raw(style.raw));
+            lvgl_sys::lv_obj_add_style(
+                self.raw()?.as_mut(),
+                part.into(),
+                style.raw.as_mut() as *mut _,
+            );
         };
         Ok(())
     }
@@ -172,6 +176,38 @@ macro_rules! define_object {
         }
     };
 }
+
+// define_object!(Rafael);
+//
+// impl Rafael {
+//     pub fn create(
+//         parent: &mut impl crate::NativeObject,
+//         copy: Option<&Rafael>,
+//     ) -> crate::LvResult<Self> {
+//         unsafe {
+//             let ptr = lvgl_sys::lv_arc_create(
+//                 parent.raw()?.as_mut(),
+//                 copy.map(|c| c.raw().unwrap().as_mut() as *mut lvgl_sys::lv_obj_t)
+//                     .unwrap_or(core::ptr::null_mut() as *mut lvgl_sys::lv_obj_t),
+//             );
+//             if let Some(raw) = core::ptr::NonNull::new(ptr) {
+//                 let core = <crate::Obj as crate::Widget>::from_raw(raw);
+//                 Ok(Self { core })
+//             } else {
+//                 Err(crate::LvError::InvalidReference)
+//             }
+//         }
+//     }
+//
+//     pub fn create_at(parent: &mut impl crate::NativeObject) -> crate::LvResult<Self> {
+//         Ok(Self::create(parent, None)?)
+//     }
+//
+//     pub fn new() -> crate::LvResult<Self> {
+//         let mut parent = crate::display::DefaultDisplay::get_scr_act()?;
+//         Ok(Self::create_at(&mut parent)?)
+//     }
+// }
 
 bitflags! {
     pub struct State: u32 {
