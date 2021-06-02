@@ -36,8 +36,8 @@ impl<T> Box<T> {
     }
 
     pub fn into_raw(self) -> *mut T {
-        let b = mem::ManuallyDrop::new(self.0);
-        b.as_ptr()
+        let b = mem::ManuallyDrop::new(self);
+        b.0.as_ptr()
     }
 }
 

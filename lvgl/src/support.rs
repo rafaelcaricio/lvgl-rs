@@ -1,3 +1,4 @@
+use crate::display::DisplayError;
 use crate::Widget;
 use core::convert::{TryFrom, TryInto};
 use core::ptr::NonNull;
@@ -11,6 +12,17 @@ pub enum LvError {
     Uninitialized,
     LvOOMemory,
     AlreadyInUse,
+}
+
+impl From<DisplayError> for LvError {
+    fn from(err: DisplayError) -> Self {
+        use LvError::*;
+        match err {
+            DisplayError::NotAvailable => Uninitialized,
+            DisplayError::FailedToRegister => InvalidReference,
+            DisplayError::NotRegistered => Uninitialized,
+        }
+    }
 }
 
 #[derive(Clone)]

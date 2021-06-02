@@ -42,6 +42,10 @@ pub(crate) fn get_str_act(disp: Option<&Display>) -> Result<Obj> {
     ))
 }
 
+/// You have to call this function periodically.
+/// Expects a `tick_period` duration as argument which is the call period of this
+/// function in milliseconds.
+#[inline]
 pub fn tick_inc(tick_period: Duration) {
     unsafe {
         lvgl_sys::lv_tick_inc(tick_period.as_millis() as u32);
@@ -49,8 +53,7 @@ pub fn tick_inc(tick_period: Duration) {
 }
 
 /// Call it periodically to handle tasks.
-/// Returns the duration after which it must be called again.
-pub fn task_handler() -> Option<Duration> {
-    let next_call_at = unsafe { lvgl_sys::lv_task_handler() };
-    Some(Duration::from_secs(next_call_at as u64))
+#[inline]
+pub fn task_handler() {
+    unsafe { lvgl_sys::lv_task_handler() };
 }

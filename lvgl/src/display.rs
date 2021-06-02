@@ -10,7 +10,7 @@ use embedded_graphics::drawable;
 use embedded_graphics::prelude::*;
 
 #[cfg(feature = "alloc")]
-use parking_lot::Mutex;
+use parking_lot::Mutex; // TODO: Can this really be used in no_std envs with alloc?
 
 #[cfg(feature = "alloc")]
 use alloc::sync::Arc;
@@ -90,14 +90,15 @@ impl DisplayBuffer {
     pub fn new() -> Self {
         let disp_buf = unsafe {
             let mut disp_buf = MaybeUninit::uninit();
+            // TODO: Need to find a way to not add this to LVGL memory.
             let mut refresh_buffer1 = Box::new([lvgl_sys::lv_color_t::default(); BUF_SIZE]);
-            let mut refresh_buffer2 = Box::new([lvgl_sys::lv_color_t::default(); BUF_SIZE]);
+            //let mut refresh_buffer2 = Box::new([lvgl_sys::lv_color_t::default(); BUF_SIZE]);
             // let refresh_buffer2 = [lvgl_sys::lv_color_t::default(); BUF_SIZE];
             lvgl_sys::lv_disp_buf_init(
                 disp_buf.as_mut_ptr(),
                 Box::into_raw(refresh_buffer1) as *mut cty::c_void,
-                Box::into_raw(refresh_buffer2) as *mut cty::c_void,
-                //ptr::null_mut(),
+                //  Box::into_raw(refresh_buffer2) as *mut cty::c_void,
+                ptr::null_mut(),
                 lvgl_sys::LV_HOR_RES_MAX * REFRESH_BUFFER_LEN as u32,
             );
             disp_buf.assume_init()

@@ -23,7 +23,7 @@ extern crate lazy_static;
 #[macro_use]
 mod lv_core;
 
-#[cfg(feature = "lvgl_alloc")]
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 // We can ONLY use `alloc::boxed::Box` if `lvgl_alloc` is enabled.
