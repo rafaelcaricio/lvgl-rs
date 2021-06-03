@@ -18,7 +18,12 @@ use alloc::sync::Arc;
 // TODO: Make this an external configuration
 const REFRESH_BUFFER_LEN: usize = 2;
 // Declare a buffer for the refresh rate
-pub(crate) const BUF_SIZE: usize = lvgl_sys::LV_HOR_RES_MAX as usize * REFRESH_BUFFER_LEN;
+const BUF_SIZE: usize = lvgl_sys::LV_HOR_RES_MAX as usize * REFRESH_BUFFER_LEN;
+
+static mut REFRESH_BUFFER1: [MaybeUninit<lvgl_sys::lv_color_t>; BUF_SIZE] =
+    [MaybeUninit::<lvgl_sys::lv_color_t>::uninit(); BUF_SIZE];
+
+static mut DRAW_BUFFER: MaybeUninit<lvgl_sys::lv_disp_buf_t> = MaybeUninit::uninit();
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DisplayError {
@@ -82,29 +87,21 @@ impl DefaultDisplay {
     }
 }
 
-pub struct DisplayBuffer {
-    disp_buf: lvgl_sys::lv_disp_buf_t,
-}
+pub struct DisplayBuffer {}
 
 impl DisplayBuffer {
     pub fn new() -> Self {
-        let disp_buf = unsafe {
-            let mut disp_buf = MaybeUninit::uninit();
-            // TODO: Need to find a way to not add this to LVGL memory.
-            let mut refresh_buffer1 = Box::new([lvgl_sys::lv_color_t::default(); BUF_SIZE]);
-            //let mut refresh_buffer2 = Box::new([lvgl_sys::lv_color_t::default(); BUF_SIZE]);
-            // let refresh_buffer2 = [lvgl_sys::lv_color_t::default(); BUF_SIZE];
+        unsafe {
             lvgl_sys::lv_disp_buf_init(
-                disp_buf.as_mut_ptr(),
-                Box::into_raw(refresh_buffer1) as *mut cty::c_void,
+                DRAW_BUFFER.as_mut_ptr(),
+                &mut REFRESH_BUFFER1 as *mut _ as *mut cty::c_void,
                 //  Box::into_raw(refresh_buffer2) as *mut cty::c_void,
                 ptr::null_mut(),
                 lvgl_sys::LV_HOR_RES_MAX * REFRESH_BUFFER_LEN as u32,
             );
-            disp_buf.assume_init()
         };
 
-        Self { disp_buf }
+        Self {}
     }
 }
 
@@ -123,16 +120,17 @@ where
     T: DrawTarget<C>,
     C: PixelColor + From<Color>,
 {
-    pub fn new(display_buffer: DisplayBuffer, native_display: T) -> Self {
+    pub fn new(_display_buffer: DisplayBuffer, native_display: T) -> Self {
         let mut disp_drv = unsafe {
             let mut inner = MaybeUninit::uninit();
             lvgl_sys::lv_disp_drv_init(inner.as_mut_ptr());
             inner.assume_init()
         };
 
-        // We need to add to a `Box`, so it's copied to a memory location in the "heap" (LVGL statically allocated heap).
-        let mut disp_buf = ManuallyDrop::new(display_buffer.disp_buf);
-        disp_drv.buffer = &mut disp_buf as *mut _ as *mut lvgl_sys::lv_disp_buf_t;
+        // Safety: The variable `disp_buf` is statically allocated, no need to worry about this being dropped.
+        unsafe {
+            disp_drv.buffer = DRAW_BUFFER.as_mut_ptr();
+        }
 
         let mut native_display = ManuallyDrop::new(DisplayUserData {
             display: native_display,
@@ -154,7 +152,7 @@ where
 
     #[cfg(feature = "alloc")]
     pub fn new_shared(
-        display_buffer: DisplayBuffer,
+        _display_buffer: DisplayBuffer,
         shared_native_display: SharedNativeDisplay<T>,
     ) -> Self {
         let mut disp_drv = unsafe {
@@ -163,9 +161,10 @@ where
             inner.assume_init()
         };
 
-        // We need to add to a `Box`, so it's copied to a memory location in the "heap" (LVGL statically allocated heap).
-        disp_drv.buffer =
-            Box::into_raw(Box::new(display_buffer.disp_buf)) as *mut lvgl_sys::lv_disp_buf_t;
+        // Safety: The variable `disp_buf` is statically allocated, no need to worry about this being dropped.
+        unsafe {
+            disp_drv.buffer = DRAW_BUFFER.as_mut_ptr();
+        }
 
         let native_display = SharedDisplayUserData {
             display: shared_native_display,
