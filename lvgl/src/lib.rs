@@ -55,20 +55,27 @@ pub mod widgets;
 use core::sync::atomic::{AtomicBool, Ordering};
 pub use functions::*;
 pub use lv_core::*;
-use parking_lot::Mutex;
 pub use support::*;
 pub use ui::*;
 
-lazy_static! {
-    static ref MUTEX: Mutex<AtomicBool> = Mutex::new(AtomicBool::new(false));
+struct RunOnce(AtomicBool);
+
+impl RunOnce {
+    const fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
+
+    fn swap_and_get(&self) -> bool {
+        self.0
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    }
 }
 
+static LVGL_INITIALIZED: RunOnce = RunOnce::new();
+
 pub fn init() {
-    let initialized = MUTEX.lock();
-    if initialized
-        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        .is_ok()
-    {
+    if LVGL_INITIALIZED.swap_and_get() {
         unsafe {
             lvgl_sys::lv_init();
         }
@@ -78,20 +85,19 @@ pub fn init() {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::display::Display;
+    use crate::display::{Display, DrawBuffer};
     use embedded_graphics::mock_display::MockDisplay;
     use embedded_graphics::pixelcolor::Rgb565;
 
     pub(crate) fn initialize_test() {
         init();
 
-        static RUN_ONCE: Mutex<Option<u8>> = parking_lot::const_mutex(None);
-        let mut run_once = RUN_ONCE.lock();
+        static DRAW_BUFFER: DrawBuffer = DrawBuffer::new();
+        static ONCE_INIT: RunOnce = RunOnce::new();
 
-        if run_once.is_none() {
+        if ONCE_INIT.swap_and_get() {
             let embedded_graphics_display: MockDisplay<Rgb565> = Default::default();
-            let _ = Display::register(embedded_graphics_display).unwrap();
-            *run_once = Some(1);
+            let _ = Display::register(&DRAW_BUFFER, embedded_graphics_display).unwrap();
         }
     }
 }

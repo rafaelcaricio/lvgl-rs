@@ -5,7 +5,7 @@ use embedded_graphics_simulator::{
     OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
 };
 use lvgl;
-use lvgl::display::{DefaultDisplay, Display};
+use lvgl::display::{DefaultDisplay, Display, DrawBuffer};
 use lvgl::style::Style;
 use lvgl::widgets::{Label, LabelAlign};
 use lvgl::{Align, Color, LvError, Part, State, Widget, UI};
@@ -15,6 +15,8 @@ use std::sync::Arc as SyncArc;
 use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+
+static DRAW_BUFFER: DrawBuffer = DrawBuffer::new();
 
 fn main() -> Result<(), LvError> {
     lvgl::init();
@@ -29,10 +31,12 @@ fn main() -> Result<(), LvError> {
 
     // Implement and register your display:
     let shared_native_display = SyncArc::new(Mutex::new(embedded_graphics_display));
-    let _display = Display::register_shared(&shared_native_display)?;
+    let _display = Display::register_shared(&DRAW_BUFFER, &shared_native_display)?;
 
     // Create screen and widgets
     let mut screen = DefaultDisplay::get_scr_act()?;
+
+    println!("Before all widgets: {:?}", mem_info());
 
     let mut screen_style = Style::default();
     screen_style.set_bg_color(State::DEFAULT, Color::from_rgb((0, 0, 0)));
@@ -92,8 +96,11 @@ fn main() -> Result<(), LvError> {
                 _ => {}
             }
         }
+        println!("During run: {:?}", mem_info());
         sleep(Duration::from_secs(1));
     }
+
+    println!("Final part of demo app: {:?}", mem_info());
 
     Ok(())
 }
@@ -108,4 +115,21 @@ fn main() -> Result<(), LvError> {
 //
 extern "C" {
     pub static mut noto_sans_numeric_80: lvgl_sys::lv_font_t;
+}
+
+fn mem_info() -> lvgl_sys::lv_mem_monitor_t {
+    let mut info = lvgl_sys::lv_mem_monitor_t {
+        total_size: 0,
+        free_cnt: 0,
+        free_size: 0,
+        free_biggest_size: 0,
+        used_cnt: 0,
+        max_used: 0,
+        used_pct: 0,
+        frag_pct: 0,
+    };
+    unsafe {
+        lvgl_sys::lv_mem_monitor(&mut info as *mut _);
+    }
+    info
 }

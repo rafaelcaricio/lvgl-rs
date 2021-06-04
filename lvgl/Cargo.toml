@@ -19,6 +19,7 @@ cstr_core = "0.2.3"
 bitflags = "1.2.1"
 parking_lot = "0.11.1"
 lazy_static = "1.4.0"
+heapless = "0.7.1"
 
 [features]
 alloc = ["cstr_core/alloc"]
@@ -32,7 +33,6 @@ lvgl-sys = { version = "0.5.2", path = "../lvgl-sys" }
 
 [dev-dependencies]
 embedded-graphics-simulator = "0.2.1"
-heapless = "0.5.5"
 
 [[example]]
 name = "app"

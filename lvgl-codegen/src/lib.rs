@@ -356,7 +356,7 @@ impl Rusty for LvType {
             Some(name) => {
                 let val = if self.is_str() {
                     quote!(&cstr_core::CStr)
-                } else if (self.literal_name.contains("lv_")) {
+                } else if self.literal_name.contains("lv_") {
                     let ident = format_ident!("{}", name);
                     quote!(&#ident)
                 } else {
@@ -672,9 +672,8 @@ mod test {
                 }
 
                 pub fn new() -> crate::LvResult<Self> {
-                    Ok(Self::create_at(
-                        &mut crate::display::DefaultDisplay::get_scr_act(),
-                    )?)
+                    let mut parent = crate::display::DefaultDisplay::get_scr_act()?;
+                    Ok(Self::create_at(&mut parent)?)
                 }
             }
         };
