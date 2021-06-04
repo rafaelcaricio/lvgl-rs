@@ -18,7 +18,6 @@ embedded-graphics = "0.6.2"
 cstr_core = "0.2.3"
 bitflags = "1.2.1"
 parking_lot = "0.11.1"
-lazy_static = "1.4.0"
 heapless = "0.7.1"
 
 [features]

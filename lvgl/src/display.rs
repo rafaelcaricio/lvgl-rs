@@ -1,12 +1,11 @@
 use crate::functions::CoreError;
-use crate::Box;
 use crate::{disp_drv_register, disp_get_default, get_str_act};
+use crate::{Box, RunOnce};
 use crate::{Color, Obj};
-use core::cell::{Cell, RefCell};
+use core::cell::RefCell;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicBool, Ordering};
 use core::{ptr, result};
 use embedded_graphics::drawable;
 use embedded_graphics::prelude::*;
@@ -16,10 +15,8 @@ use parking_lot::Mutex;
 #[cfg(feature = "alloc")]
 use alloc::sync::Arc;
 
-// TODO: Make this an external configuration
-const REFRESH_BUFFER_LEN: usize = 2;
-// Declare a buffer for the refresh rate
-const BUF_SIZE: usize = lvgl_sys::LV_HOR_RES_MAX as usize * REFRESH_BUFFER_LEN;
+pub const DISP_HOR_RES: usize = lvgl_sys::LV_HOR_RES_MAX as usize;
+pub const DISP_VER_RES: usize = lvgl_sys::LV_VER_RES_MAX as usize;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DisplayError {
@@ -42,7 +39,10 @@ impl Display {
         Self { disp }
     }
 
-    pub fn register<T, C>(draw_buffer: &'static DrawBuffer, native_display: T) -> Result<Self>
+    pub fn register<T, C, const N: usize>(
+        draw_buffer: &'static DrawBuffer<N>,
+        native_display: T,
+    ) -> Result<Self>
     where
         T: DrawTarget<C>,
         C: PixelColor + From<Color>,
@@ -52,8 +52,8 @@ impl Display {
     }
 
     #[cfg(feature = "alloc")]
-    pub fn register_shared<T, C>(
-        draw_buffer: &'static DrawBuffer,
+    pub fn register_shared<T, C, const N: usize>(
+        draw_buffer: &'static DrawBuffer<N>,
         shared_native_display: &SharedNativeDisplay<T>,
     ) -> Result<Self>
     where
@@ -65,7 +65,7 @@ impl Display {
         Ok(disp_drv_register(&mut display_diver)?)
     }
 
-    pub fn get_str_act(&self) -> Result<Obj> {
+    pub fn get_scr_act(&self) -> Result<Obj> {
         Ok(get_str_act(Some(&self))?)
     }
 }
@@ -86,33 +86,29 @@ impl DefaultDisplay {
     }
 }
 
-pub struct DrawBuffer {
-    initialized: AtomicBool,
-    refresh_buffer: Mutex<RefCell<heapless::Vec<lvgl_sys::lv_color_t, BUF_SIZE>>>,
+pub struct DrawBuffer<const N: usize> {
+    initialized: RunOnce,
+    refresh_buffer: Mutex<RefCell<heapless::Vec<lvgl_sys::lv_color_t, N>>>,
 }
 
-impl DrawBuffer {
+impl<const N: usize> DrawBuffer<N> {
     pub const fn new() -> Self {
         Self {
-            initialized: AtomicBool::new(false),
+            initialized: RunOnce::new(),
             refresh_buffer: const_mutex(RefCell::new(heapless::Vec::new())),
         }
     }
 
     fn get_ptr(&self) -> Option<Box<lvgl_sys::lv_disp_buf_t>> {
-        if self
-            .initialized
-            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-            .is_ok()
-        {
+        if self.initialized.swap_and_check() {
             let mut inner: MaybeUninit<lvgl_sys::lv_disp_buf_t> = MaybeUninit::uninit();
-            let refresh_buffer_guard = self.refresh_buffer.lock();
+            let primary_buffer_guard = self.refresh_buffer.lock();
             let draw_buf = unsafe {
                 lvgl_sys::lv_disp_buf_init(
                     inner.as_mut_ptr(),
-                    refresh_buffer_guard.borrow_mut().as_mut_ptr() as *mut _ as *mut cty::c_void,
+                    primary_buffer_guard.borrow_mut().as_mut_ptr() as *mut _ as *mut cty::c_void,
                     ptr::null_mut(),
-                    lvgl_sys::LV_HOR_RES_MAX * REFRESH_BUFFER_LEN as u32,
+                    N as u32,
                 );
                 inner.assume_init()
             };
@@ -138,7 +134,10 @@ where
     T: DrawTarget<C>,
     C: PixelColor + From<Color>,
 {
-    pub fn new(draw_buffer: &'static DrawBuffer, native_display: T) -> Result<Self> {
+    pub fn new<const N: usize>(
+        draw_buffer: &'static DrawBuffer<N>,
+        native_display: T,
+    ) -> Result<Self> {
         let mut disp_drv = unsafe {
             let mut inner = MaybeUninit::uninit();
             lvgl_sys::lv_disp_drv_init(inner.as_mut_ptr());
@@ -171,8 +170,8 @@ where
     }
 
     #[cfg(feature = "alloc")]
-    pub fn new_shared(
-        draw_buffer: &'static DrawBuffer,
+    pub fn new_shared<const N: usize>(
+        draw_buffer: &'static DrawBuffer<N>,
         shared_native_display: SharedNativeDisplay<T>,
     ) -> Result<Self> {
         let mut disp_drv = unsafe {
@@ -339,7 +338,7 @@ mod tests {
         let display = Display::default();
 
         let _screen_direct = display
-            .get_str_act()
+            .get_scr_act()
             .expect("Return screen directly from the display instance");
 
         let _screen_default =
@@ -352,7 +351,7 @@ mod tests {
         let display = Display::default();
 
         let _screen = display
-            .get_str_act()
+            .get_scr_act()
             .expect("Return screen directly from the display instance");
 
         Ok(())

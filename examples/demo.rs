@@ -5,10 +5,9 @@ use embedded_graphics_simulator::{
     OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
 };
 use lvgl;
-use lvgl::display::{DefaultDisplay, Display, DrawBuffer};
 use lvgl::style::Style;
 use lvgl::widgets::{Label, LabelAlign};
-use lvgl::{Align, Color, LvError, Part, State, Widget, UI};
+use lvgl::{Align, Color, DefaultDisplay, Display, DrawBuffer, LvError, Part, State, Widget};
 use lvgl_sys;
 use parking_lot::Mutex;
 use std::sync::Arc as SyncArc;
@@ -16,25 +15,32 @@ use std::thread;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-static DRAW_BUFFER: DrawBuffer = DrawBuffer::new();
-
 fn main() -> Result<(), LvError> {
-    lvgl::init();
-
     let embedded_graphics_display: SimulatorDisplay<Rgb565> = SimulatorDisplay::new(Size::new(
-        lvgl_sys::LV_HOR_RES_MAX,
-        lvgl_sys::LV_VER_RES_MAX,
+        lvgl::DISP_HOR_RES as u32,
+        lvgl::DISP_VER_RES as u32,
     ));
 
     let output_settings = OutputSettingsBuilder::new().scale(1).build();
     let mut window = Window::new("PineTime", &output_settings);
 
-    // Implement and register your display:
     let shared_native_display = SyncArc::new(Mutex::new(embedded_graphics_display));
-    let _display = Display::register_shared(&DRAW_BUFFER, &shared_native_display)?;
+
+    // LVGL-rs usage starts here
+    lvgl::init();
+
+    // LVGL will render the graphics here first, and seed the rendered image to the
+    // display. The buffer size can be set freely but 1/10 screen size is a good starting point.
+    const REFRESH_BUFFER_SIZE: usize = lvgl::DISP_HOR_RES * lvgl::DISP_VER_RES / 10;
+    static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
+
+    // Register your native display with LVGL. We use the `Display::register_shared()` method here,
+    // but that's because the Simulator needs a mutable reference to the display so it can draw
+    // updates. On your embedded device code, you will use `Display::register()`.
+    let display = Display::register_shared(&DRAW_BUFFER, &shared_native_display)?;
 
     // Create screen and widgets
-    let mut screen = DefaultDisplay::get_scr_act()?;
+    let mut screen = display.get_scr_act()?;
 
     println!("Before all widgets: {:?}", mem_info());
 

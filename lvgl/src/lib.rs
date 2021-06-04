@@ -18,9 +18,6 @@
 extern crate bitflags;
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 mod lv_core;
 
 #[cfg(feature = "alloc")]
@@ -47,7 +44,8 @@ pub(crate) mod mem;
 #[cfg(not(feature = "lvgl_alloc"))]
 use crate::mem::Box;
 
-pub mod display;
+mod display;
+pub use display::*;
 mod functions;
 mod support;
 mod ui;
@@ -65,7 +63,7 @@ impl RunOnce {
         Self(AtomicBool::new(false))
     }
 
-    fn swap_and_get(&self) -> bool {
+    fn swap_and_check(&self) -> bool {
         self.0
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
@@ -75,7 +73,7 @@ impl RunOnce {
 static LVGL_INITIALIZED: RunOnce = RunOnce::new();
 
 pub fn init() {
-    if LVGL_INITIALIZED.swap_and_get() {
+    if LVGL_INITIALIZED.swap_and_check() {
         unsafe {
             lvgl_sys::lv_init();
         }
@@ -92,11 +90,13 @@ pub(crate) mod tests {
     pub(crate) fn initialize_test() {
         init();
 
-        static DRAW_BUFFER: DrawBuffer = DrawBuffer::new();
+        let embedded_graphics_display: MockDisplay<Rgb565> = Default::default();
+
+        const REFRESH_BUFFER_SIZE: usize = 64 * 64 / 10;
+        static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
         static ONCE_INIT: RunOnce = RunOnce::new();
 
-        if ONCE_INIT.swap_and_get() {
-            let embedded_graphics_display: MockDisplay<Rgb565> = Default::default();
+        if ONCE_INIT.swap_and_check() {
             let _ = Display::register(&DRAW_BUFFER, embedded_graphics_display).unwrap();
         }
     }
