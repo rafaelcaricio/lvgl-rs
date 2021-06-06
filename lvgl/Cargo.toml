@@ -21,6 +21,7 @@ parking_lot = "0.11.1"
 heapless = "0.7.1"
 
 [features]
+default = []
 alloc = ["cstr_core/alloc"]
 lvgl_alloc = ["alloc"]
 

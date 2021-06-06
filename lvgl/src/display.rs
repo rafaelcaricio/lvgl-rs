@@ -101,6 +101,9 @@ impl<const N: usize> DrawBuffer<N> {
 
     fn get_ptr(&self) -> Option<Box<lvgl_sys::lv_disp_buf_t>> {
         if self.initialized.swap_and_check() {
+            // TODO: needs to be 'static somehow
+            // Cannot be in the DrawBuffer struct because the type `lv_disp_buf_t` contains a raw
+            // pointer and raw pointers are not Sync and consequently cannot be in `static` variables.
             let mut inner: MaybeUninit<lvgl_sys::lv_disp_buf_t> = MaybeUninit::uninit();
             let primary_buffer_guard = self.refresh_buffer.lock();
             let draw_buf = unsafe {
