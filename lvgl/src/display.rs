@@ -64,14 +64,14 @@ impl DefaultDisplay {
 
 pub struct DrawBuffer<const N: usize> {
     initialized: RunOnce,
-    refresh_buffer: Mutex<RefCell<heapless::Vec<lvgl_sys::lv_color_t, N>>>,
+    refresh_buffer: Mutex<RefCell<[MaybeUninit<lvgl_sys::lv_color_t>; N]>>,
 }
 
 impl<const N: usize> DrawBuffer<N> {
     pub const fn new() -> Self {
         Self {
             initialized: RunOnce::new(),
-            refresh_buffer: const_mutex(RefCell::new(heapless::Vec::new())),
+            refresh_buffer: const_mutex(RefCell::new([MaybeUninit::uninit(); N])),
         }
     }
 

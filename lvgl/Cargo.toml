@@ -14,11 +14,10 @@ build = "build.rs"
 [dependencies]
 lvgl-sys = { version = "0.5.2", path = "../lvgl-sys" }
 cty = "0.2.1"
-embedded-graphics = { version = "0.6.2", optional = true }
 cstr_core = "0.2.3"
 bitflags = "1.2.1"
 parking_lot = "0.11.1"
-heapless = "0.7.1"
+embedded-graphics = { version = "0.6.2", optional = true }
 
 [features]
 default = []
