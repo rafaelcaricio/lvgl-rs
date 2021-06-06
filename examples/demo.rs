@@ -40,37 +40,14 @@ fn main() -> Result<(), LvError> {
     // // static DISPLAY_REGISTRY: SingleDisplayRegistry = DisplayRegistry::empty();
     // let display = DISPLAY_REGISTRY.register_shared(&DRAW_BUFFER, shared_native_display.clone())?;
 
-    // Register your native display with LVGL. We use the `Display::register_shared()` method here,
-    // but that's because the Simulator needs a mutable reference to the display so it can draw
-    // updates. On your embedded device code, you will use `Display::register()`.
-    let shared_disp_inner = shared_native_display.clone();
-    let display = Display::register_shared(&DRAW_BUFFER, move |update| {
-        // make this a `.into_pixels()` method in DisplayRefresh or `From<DisplayRefresh> for T where T: IntoIterator<Item = drawable::Pixel<C>>`
-        let area = &update.area;
-        let x1 = area.x1;
-        let x2 = area.x2;
-        let y1 = area.y1;
-        let y2 = area.y2;
-
-        let ys = y1..=y2;
-        let xs = (x1..=x2).enumerate();
-        let x_len = (x2 - x1 + 1) as usize;
-
-        // We use iterators here to ensure that the Rust compiler can apply all possible
-        // optimizations at compile time.
-        let pixels = ys
-            .enumerate()
-            .map(|(iy, y)| {
-                xs.clone().map(move |(ix, x)| {
-                    let color_len = x_len * iy + ix;
-                    let raw_color = update.colors[color_len];
-                    drawable::Pixel(Point::new(x as i32, y as i32), raw_color.into())
-                })
-            })
-            .flatten();
-
-        let mut em_disp = shared_disp_inner.lock();
-        em_disp.draw_iter(pixels);
+    // Register your display update callback with LVGL. The closure you pass here will be called
+    // whenever LVGL has updates to be painted to the display.
+    let display = Display::register(&DRAW_BUFFER, {
+        let shared_disp_inner = SyncArc::clone(&shared_native_display);
+        move |update| {
+            let mut em_disp = shared_disp_inner.lock();
+            em_disp.draw_iter(update.as_pixels());
+        }
     })?;
 
     // Create screen and widgets

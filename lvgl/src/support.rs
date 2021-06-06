@@ -2,6 +2,8 @@ use crate::display::DisplayError;
 use crate::Widget;
 use core::convert::{TryFrom, TryInto};
 use core::ptr::NonNull;
+
+#[cfg(feature = "embedded_graphics")]
 use embedded_graphics::pixelcolor::{Rgb565, Rgb888};
 
 pub type LvResult<T> = Result<T, LvError>;
@@ -53,6 +55,7 @@ impl Color {
     }
 }
 
+#[cfg(feature = "embedded_graphics")]
 impl From<Color> for Rgb888 {
     fn from(color: Color) -> Self {
         unsafe {
@@ -65,6 +68,7 @@ impl From<Color> for Rgb888 {
     }
 }
 
+#[cfg(feature = "embedded_graphics")]
 impl From<Color> for Rgb565 {
     fn from(color: Color) -> Self {
         unsafe {

@@ -48,13 +48,11 @@ mod display;
 pub use display::*;
 mod functions;
 mod support;
-mod ui;
 pub mod widgets;
 use core::sync::atomic::{AtomicBool, Ordering};
 pub use functions::*;
 pub use lv_core::*;
 pub use support::*;
-pub use ui::*;
 
 struct RunOnce(AtomicBool);
 
@@ -84,20 +82,16 @@ pub fn init() {
 pub(crate) mod tests {
     use super::*;
     use crate::display::{Display, DrawBuffer};
-    use embedded_graphics::mock_display::MockDisplay;
-    use embedded_graphics::pixelcolor::Rgb565;
 
     pub(crate) fn initialize_test() {
         init();
-
-        let embedded_graphics_display: MockDisplay<Rgb565> = Default::default();
 
         const REFRESH_BUFFER_SIZE: usize = 64 * 64 / 10;
         static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
         static ONCE_INIT: RunOnce = RunOnce::new();
 
         if ONCE_INIT.swap_and_check() {
-            let _ = Display::register(&DRAW_BUFFER, embedded_graphics_display).unwrap();
+            let _ = Display::register(&DRAW_BUFFER, |_| {}).unwrap();
         }
     }
 }

@@ -3,17 +3,11 @@ use crate::{disp_drv_register, disp_get_default, get_str_act};
 use crate::{Box, RunOnce};
 use crate::{Color, Obj};
 use core::cell::RefCell;
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
 use core::{ptr, result};
-use embedded_graphics::drawable;
-use embedded_graphics::prelude::*;
 use parking_lot::const_mutex;
 use parking_lot::Mutex;
-
-#[cfg(feature = "alloc")]
-use alloc::sync::Arc;
 
 pub const DISP_HOR_RES: usize = lvgl_sys::LV_HOR_RES_MAX as usize;
 pub const DISP_VER_RES: usize = lvgl_sys::LV_VER_RES_MAX as usize;
@@ -27,9 +21,6 @@ pub enum DisplayError {
 
 type Result<T> = result::Result<T, DisplayError>;
 
-#[cfg(feature = "alloc")]
-pub type SharedNativeDisplay<T> = Arc<Mutex<T>>;
-
 pub struct Display {
     pub(crate) disp: NonNull<lvgl_sys::lv_disp_t>,
 }
@@ -39,27 +30,14 @@ impl Display {
         Self { disp }
     }
 
-    // pub fn register<T, C, const N: usize>(
-    //     draw_buffer: &'static DrawBuffer<N>,
-    //     native_display: T,
-    // ) -> Result<Self>
-    // where
-    //     T: DrawTarget<C>,
-    //     C: PixelColor + From<Color>,
-    // {
-    //     let mut display_diver = DisplayDriver::new(draw_buffer, native_display)?;
-    //     Ok(disp_drv_register(&mut display_diver)?)
-    // }
-
-    #[cfg(feature = "alloc")]
-    pub fn register_shared<F, const N: usize>(
+    pub fn register<F, const N: usize>(
         draw_buffer: &'static DrawBuffer<N>,
         display_update: F,
     ) -> Result<Self>
     where
         F: FnMut(&DisplayRefresh<N>) + 'static,
     {
-        let mut display_diver = DisplayDriver::new_shared(draw_buffer, display_update)?;
+        let mut display_diver = DisplayDriver::new(draw_buffer, display_update)?;
         Ok(disp_drv_register(&mut display_diver)?)
     }
 
@@ -125,45 +103,9 @@ pub struct DisplayDriver {
 }
 
 impl DisplayDriver {
-    // pub fn new<const N: usize>(
-    //     draw_buffer: &'static DrawBuffer<N>,
-    //     native_display: T,
-    // ) -> Result<Self> {
-    //     let mut disp_drv = unsafe {
-    //         let mut inner = MaybeUninit::uninit();
-    //         lvgl_sys::lv_disp_drv_init(inner.as_mut_ptr());
-    //         inner.assume_init()
-    //     };
-    //
-    //     // Safety: The variable `draw_buffer` is statically allocated, no need to worry about this being dropped.
-    //     disp_drv.buffer = draw_buffer
-    //         .get_ptr()
-    //         .map(|ptr| Box::into_raw(ptr) as *mut _)
-    //         .ok_or(DisplayError::FailedToRegister)?;
-    //
-    //     let native_display = DisplayUserData {
-    //         display: native_display,
-    //         phantom: PhantomData,
-    //     };
-    //     disp_drv.user_data =
-    //         Box::into_raw(Box::new(native_display)) as *mut _ as lvgl_sys::lv_disp_drv_user_data_t;
-    //
-    //     // Sets trampoline pointer to the function implementation using the types (T, C) that
-    //     // are used in this instance of `DisplayDriver`.
-    //     disp_drv.flush_cb = Some(disp_flush_trampoline::<T, C>);
-    //
-    //     // We do not store any memory that can be accidentally deallocated by on the Rust side.
-    //     Ok(Self {
-    //         disp_drv,
-    //         phantom_color: PhantomData,
-    //         phantom_display: PhantomData,
-    //     })
-    // }
-
-    #[cfg(feature = "alloc")]
-    pub fn new_shared<F, const N: usize>(
+    pub fn new<F, const N: usize>(
         draw_buffer: &'static DrawBuffer<N>,
-        display_update: F,
+        display_update_callback: F,
     ) -> Result<Self>
     where
         F: FnMut(&DisplayRefresh<N>) + 'static,
@@ -180,78 +122,19 @@ impl DisplayDriver {
             .map(|ptr| Box::into_raw(ptr) as *mut _)
             .ok_or(DisplayError::FailedToRegister)?;
 
-        disp_drv.user_data =
-            Box::into_raw(Box::new(display_update)) as *mut _ as lvgl_sys::lv_disp_drv_user_data_t;
+        disp_drv.user_data = Box::into_raw(Box::new(display_update_callback)) as *mut _
+            as lvgl_sys::lv_disp_drv_user_data_t;
 
-        // Sets trampoline pointer to the function implementation using the types (T, C) that
-        // are used in this instance of `DisplayDriver`.
-        disp_drv.flush_cb = Some(shared_disp_flush_trampoline::<F, N>);
+        // Sets trampoline pointer to the function implementation that uses the `F` type for a
+        // refresh buffer of size N specifically.
+        disp_drv.flush_cb = Some(disp_flush_trampoline::<F, N>);
 
         // We do not store any memory that can be accidentally deallocated by on the Rust side.
         Ok(Self { disp_drv })
     }
 }
 
-pub(crate) struct DisplayUserData<T, C>
-where
-    T: DrawTarget<C>,
-    C: PixelColor + From<Color>,
-{
-    display: T,
-    phantom: PhantomData<C>,
-}
-
-unsafe extern "C" fn disp_flush_trampoline<T, C>(
-    disp_drv: *mut lvgl_sys::lv_disp_drv_t,
-    area: *const lvgl_sys::lv_area_t,
-    color_p: *mut lvgl_sys::lv_color_t,
-) where
-    T: DrawTarget<C>,
-    C: PixelColor + From<Color>,
-{
-    let display_driver = *disp_drv;
-    if !display_driver.user_data.is_null() {
-        let user_data = &mut *(display_driver.user_data as *mut DisplayUserData<T, C>);
-        let x1 = (*area).x1;
-        let x2 = (*area).x2;
-        let y1 = (*area).y1;
-        let y2 = (*area).y2;
-
-        let ys = y1..=y2;
-        let xs = (x1..=x2).enumerate();
-        let x_len = (x2 - x1 + 1) as usize;
-
-        // We use iterators here to ensure that the Rust compiler can apply all possible
-        // optimizations at compile time.
-        let pixels = ys
-            .enumerate()
-            .map(|(iy, y)| {
-                xs.clone().map(move |(ix, x)| {
-                    let color_len = x_len * iy + ix;
-                    let lv_color = unsafe { *color_p.add(color_len) };
-                    let raw_color = Color::from_raw(lv_color);
-                    drawable::Pixel::<C>(Point::new(x as i32, y as i32), raw_color.into())
-                })
-            })
-            .flatten();
-
-        let _ = user_data.display.draw_iter(pixels);
-    }
-
-    // Indicate to LVGL that we are ready with the flushing
-    lvgl_sys::lv_disp_flush_ready(disp_drv);
-}
-
-#[cfg(feature = "alloc")]
-pub(crate) struct SharedDisplayUserData<T, C>
-where
-    T: DrawTarget<C>,
-    C: PixelColor + From<Color>,
-{
-    display: SharedNativeDisplay<T>,
-    phantom: PhantomData<C>,
-}
-
+/// Represents a sub-area of the display that is being updated.
 pub struct Area {
     pub x1: i16,
     pub x2: i16,
@@ -259,13 +142,50 @@ pub struct Area {
     pub y2: i16,
 }
 
+/// It's a update to the display information, contains the area that is being updated and the color
+/// of the pixels that need to be updated. The colors are represented in a contiguous array.
 pub struct DisplayRefresh<const N: usize> {
     pub area: Area,
     pub colors: [Color; N],
 }
 
-#[cfg(feature = "alloc")]
-unsafe extern "C" fn shared_disp_flush_trampoline<F, const N: usize>(
+#[cfg(feature = "embedded_graphics")]
+mod embedded_graphics_impl {
+    use crate::{Color, DisplayRefresh};
+    use embedded_graphics::drawable;
+    use embedded_graphics::prelude::*;
+
+    impl<const N: usize> DisplayRefresh<N> {
+        pub fn as_pixels<C>(&self) -> impl IntoIterator<Item = drawable::Pixel<C>> + '_
+        where
+            C: PixelColor + From<Color>,
+        {
+            let area = &self.area;
+            let x1 = area.x1;
+            let x2 = area.x2;
+            let y1 = area.y1;
+            let y2 = area.y2;
+
+            let ys = y1..=y2;
+            let xs = (x1..=x2).enumerate();
+            let x_len = (x2 - x1 + 1) as usize;
+
+            // We use iterators here to ensure that the Rust compiler can apply all possible
+            // optimizations at compile time.
+            ys.enumerate()
+                .map(move |(iy, y)| {
+                    xs.clone().map(move |(ix, x)| {
+                        let color_len = x_len * iy + ix;
+                        let raw_color = self.colors[color_len];
+                        drawable::Pixel(Point::new(x as i32, y as i32), raw_color.into())
+                    })
+                })
+                .flatten()
+        }
+    }
+}
+
+unsafe extern "C" fn disp_flush_trampoline<F, const N: usize>(
     disp_drv: *mut lvgl_sys::lv_disp_drv_t,
     area: *const lvgl_sys::lv_area_t,
     color_p: *mut lvgl_sys::lv_color_t,
@@ -279,7 +199,7 @@ unsafe extern "C" fn shared_disp_flush_trampoline<F, const N: usize>(
         let mut colors = [Color::default(); N];
         let mut color_len = 0;
         for color in &mut colors {
-            let lv_color = unsafe { *color_p.add(color_len) };
+            let lv_color = *color_p.add(color_len);
             *color = Color::from_raw(lv_color);
             color_len += 1;
         }

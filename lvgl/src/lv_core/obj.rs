@@ -1,5 +1,4 @@
 use crate::lv_core::style::Style;
-use crate::Box;
 use crate::{Align, LvError, LvResult};
 use core::ptr;
 

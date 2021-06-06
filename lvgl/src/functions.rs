@@ -1,9 +1,8 @@
 use crate::display::{Display, DisplayDriver};
-use crate::{Color, Obj, Widget};
+use crate::{Obj, Widget};
 use core::ptr::NonNull;
 use core::time::Duration;
 use core::{ptr, result};
-use embedded_graphics::prelude::*;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CoreError {
