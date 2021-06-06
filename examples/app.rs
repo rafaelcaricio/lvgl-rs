@@ -2,8 +2,8 @@ use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, Window};
 use lvgl;
-use lvgl::display::Display;
 use lvgl::widgets::Label;
+use lvgl::{Display, DrawBuffer};
 use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -12,8 +12,8 @@ type ColorSpace = Rgb565;
 
 fn main() {
     let embedded_graphics_display: SimulatorDisplay<ColorSpace> = SimulatorDisplay::new(Size::new(
-        lvgl_sys::LV_HOR_RES_MAX,
-        lvgl_sys::LV_VER_RES_MAX,
+        lvgl::DISP_HOR_RES as u32,
+        lvgl::DISP_VER_RES as u32,
     ));
 
     let output_settings = OutputSettingsBuilder::new().scale(2).build();
@@ -23,11 +23,18 @@ fn main() {
 
     // LVGL usage
     lvgl::init();
-    let display = Display::register_shared(&shared_native_display).unwrap();
-    let label = Label::new().unwrap();
 
-    {
-        let mut val = shared_native_display.lock();
-        val.draw_pixel(Pixel::default()).unwrap();
-    }
+    const REFRESH_BUFFER_SIZE: usize = lvgl::DISP_HOR_RES * lvgl::DISP_VER_RES / 10;
+    static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
+
+    let display = Display::register(&DRAW_BUFFER, {
+        let shared_display = Arc::clone(&shared_native_display);
+        move |update| {
+            let mut embedded_graphics_display = shared_display.lock();
+            embedded_graphics_display.draw_iter(update.as_pixels());
+        }
+    })
+    .unwrap();
+
+    let label: Label = "Nice!".into();
 }
