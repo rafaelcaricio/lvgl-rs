@@ -1,4 +1,5 @@
 use cstr_core::CString;
+use embedded_graphics::drawable;
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics_simulator::{
@@ -33,11 +34,44 @@ fn main() -> Result<(), LvError> {
     // display. The buffer size can be set freely but 1/10 screen size is a good starting point.
     const REFRESH_BUFFER_SIZE: usize = lvgl::DISP_HOR_RES * lvgl::DISP_VER_RES / 10;
     static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
+    //
+    // const NUMBER_OF_DISPLAYS: usize = 1;
+    // static DISPLAY_REGISTRY: DisplayRegistry<NUMBER_OF_DISPLAYS> = DisplayRegistry::empty();
+    // // static DISPLAY_REGISTRY: SingleDisplayRegistry = DisplayRegistry::empty();
+    // let display = DISPLAY_REGISTRY.register_shared(&DRAW_BUFFER, shared_native_display.clone())?;
 
     // Register your native display with LVGL. We use the `Display::register_shared()` method here,
     // but that's because the Simulator needs a mutable reference to the display so it can draw
     // updates. On your embedded device code, you will use `Display::register()`.
-    let display = Display::register_shared(&DRAW_BUFFER, &shared_native_display)?;
+    let shared_disp_inner = shared_native_display.clone();
+    let display = Display::register_shared(&DRAW_BUFFER, move |update| {
+        // make this a `.into_pixels()` method in DisplayRefresh or `From<DisplayRefresh> for T where T: IntoIterator<Item = drawable::Pixel<C>>`
+        let area = &update.area;
+        let x1 = area.x1;
+        let x2 = area.x2;
+        let y1 = area.y1;
+        let y2 = area.y2;
+
+        let ys = y1..=y2;
+        let xs = (x1..=x2).enumerate();
+        let x_len = (x2 - x1 + 1) as usize;
+
+        // We use iterators here to ensure that the Rust compiler can apply all possible
+        // optimizations at compile time.
+        let pixels = ys
+            .enumerate()
+            .map(|(iy, y)| {
+                xs.clone().map(move |(ix, x)| {
+                    let color_len = x_len * iy + ix;
+                    let raw_color = update.colors[color_len];
+                    drawable::Pixel(Point::new(x as i32, y as i32), raw_color.into())
+                })
+            })
+            .flatten();
+
+        let mut em_disp = shared_disp_inner.lock();
+        em_disp.draw_iter(pixels);
+    })?;
 
     // Create screen and widgets
     let mut screen = display.get_scr_act()?;

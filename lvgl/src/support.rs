@@ -25,7 +25,7 @@ impl From<DisplayError> for LvError {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Color {
     pub(crate) raw: lvgl_sys::lv_color_t,
 }

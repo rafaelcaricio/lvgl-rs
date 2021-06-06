@@ -14,9 +14,7 @@ pub enum CoreError {
 type Result<T> = result::Result<T, CoreError>;
 
 /// Register own buffer
-pub(crate) fn disp_drv_register<C: PixelColor + From<Color>, T: DrawTarget<C>>(
-    disp_drv: &mut DisplayDriver<T, C>,
-) -> Result<Display> {
+pub(crate) fn disp_drv_register(disp_drv: &mut DisplayDriver) -> Result<Display> {
     let disp_ptr = unsafe { lvgl_sys::lv_disp_drv_register(&mut disp_drv.disp_drv as *mut _) };
     Ok(Display::from_raw(
         NonNull::new(disp_ptr).ok_or(CoreError::OperationFailed)?,
