@@ -1,9 +1,6 @@
 use crate::widgets::Label;
 use crate::{LvResult, NativeObject};
 
-#[cfg(feature = "alloc")]
-use cstr_core::CString;
-
 impl Label {
     pub fn set_label_align(&mut self, align: LabelAlign) -> LvResult<()> {
         unsafe {
@@ -14,14 +11,35 @@ impl Label {
 }
 
 #[cfg(feature = "alloc")]
-impl<S: AsRef<str>> From<S> for Label {
-    fn from(text: S) -> Self {
-        let text_cstr = CString::new(text.as_ref()).unwrap();
-        let mut label = Label::new().unwrap();
-        label.set_text(text_cstr.as_c_str()).unwrap();
-        label
+mod alloc_imp {
+    use crate::widgets::Label;
+    use crate::LvError;
+    use cstr_core::CString;
+    use core::convert::TryFrom;
+
+    impl<S: AsRef<str>> From<S> for Label {
+        fn from(text: S) -> Self {
+            // text.try_into().unwrap()
+            let text_cstr = CString::new(text.as_ref()).unwrap();
+            let mut label = Label::new().unwrap();
+            label.set_text(text_cstr.as_c_str()).unwrap();
+            label
+        }
     }
+
+    // Issue link: https://github.com/rust-lang/rust/issues/50133
+    //
+    // impl<S: AsRef<str>> TryFrom<S> for Label {
+    //     type Error = LvError;
+    //     fn try_from(text: S) -> Result<Self, Self::Error> {
+    //         let text_cstr = CString::new(text.as_ref())?;
+    //         let mut label = Label::new()?;
+    //         label.set_text(text_cstr.as_c_str())?;
+    //         Ok(label)
+    //     }
+    // }
 }
+
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
