@@ -1,6 +1,9 @@
+use crate::display::DisplayError;
 use crate::Widget;
 use core::convert::{TryFrom, TryInto};
 use core::ptr::NonNull;
+
+#[cfg(feature = "embedded_graphics")]
 use embedded_graphics::pixelcolor::{Rgb565, Rgb888};
 
 pub type LvResult<T> = Result<T, LvError>;
@@ -13,7 +16,18 @@ pub enum LvError {
     AlreadyInUse,
 }
 
-#[derive(Clone)]
+impl From<DisplayError> for LvError {
+    fn from(err: DisplayError) -> Self {
+        use LvError::*;
+        match err {
+            DisplayError::NotAvailable => Uninitialized,
+            DisplayError::FailedToRegister => InvalidReference,
+            DisplayError::NotRegistered => Uninitialized,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Default)]
 pub struct Color {
     pub(crate) raw: lvgl_sys::lv_color_t,
 }
@@ -41,6 +55,7 @@ impl Color {
     }
 }
 
+#[cfg(feature = "embedded_graphics")]
 impl From<Color> for Rgb888 {
     fn from(color: Color) -> Self {
         unsafe {
@@ -53,6 +68,7 @@ impl From<Color> for Rgb888 {
     }
 }
 
+#[cfg(feature = "embedded_graphics")]
 impl From<Color> for Rgb565 {
     fn from(color: Color) -> Self {
         unsafe {

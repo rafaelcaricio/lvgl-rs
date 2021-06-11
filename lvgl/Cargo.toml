@@ -14,11 +14,14 @@ build = "build.rs"
 [dependencies]
 lvgl-sys = { version = "0.5.2", path = "../lvgl-sys" }
 cty = "0.2.1"
-embedded-graphics = "0.6.2"
 cstr_core = "0.2.3"
 bitflags = "1.2.1"
+parking_lot = "0.11.1"
+embedded-graphics = { version = "0.6.2", optional = true }
 
 [features]
+default = []
+embedded_graphics = ["embedded-graphics"]
 alloc = ["cstr_core/alloc"]
 lvgl_alloc = ["alloc"]
 
@@ -30,28 +33,33 @@ lvgl-sys = { version = "0.5.2", path = "../lvgl-sys" }
 
 [dev-dependencies]
 embedded-graphics-simulator = "0.2.1"
-heapless = "0.5.5"
+
+[[example]]
+name = "app"
+path = "../examples/app.rs"
+required-features = ["alloc", "embedded_graphics"]
 
 [[example]]
 name = "demo"
 path = "../examples/demo.rs"
-required-features = ["alloc"]
+required-features = ["alloc", "embedded_graphics"]
 
 [[example]]
 name = "bar"
 path = "../examples/bar.rs"
-required-features = ["alloc"]
+required-features = ["alloc", "embedded_graphics"]
 
 [[example]]
 name = "button_click"
 path = "../examples/button_click.rs"
-required-features = ["alloc"]
+required-features = ["alloc", "embedded_graphics"]
 
 [[example]]
 name = "gauge"
 path = "../examples/gauge.rs"
+required-features = ["alloc", "embedded_graphics"]
 
 [[example]]
 name = "arc"
 path = "../examples/arc.rs"
-required-features = ["lvgl_alloc"]
+required-features = ["alloc", "embedded_graphics"]

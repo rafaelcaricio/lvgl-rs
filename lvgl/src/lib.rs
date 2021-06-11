@@ -17,7 +17,10 @@
 #[macro_use]
 extern crate bitflags;
 
-#[cfg(feature = "lvgl_alloc")]
+#[macro_use]
+mod lv_core;
+
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 // We can ONLY use `alloc::boxed::Box` if `lvgl_alloc` is enabled.
@@ -31,12 +34,6 @@ use ::alloc::boxed::Box;
 #[cfg(feature = "lvgl_alloc")]
 mod allocator;
 
-mod support;
-mod ui;
-#[macro_use]
-mod lv_core;
-pub mod widgets;
-
 #[cfg(not(feature = "lvgl_alloc"))]
 pub(crate) mod mem;
 
@@ -47,22 +44,54 @@ pub(crate) mod mem;
 #[cfg(not(feature = "lvgl_alloc"))]
 use crate::mem::Box;
 
+mod display;
+pub use display::*;
+mod functions;
+mod support;
+pub mod widgets;
+use core::sync::atomic::{AtomicBool, Ordering};
+pub use functions::*;
 pub use lv_core::*;
 pub use support::*;
-pub use ui::*;
 
-use core::sync::atomic::{AtomicBool, Ordering};
+struct RunOnce(AtomicBool);
 
-// Initialize LVGL only once.
-static LVGL_INITIALIZED: AtomicBool = AtomicBool::new(false);
+impl RunOnce {
+    const fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
 
-pub(crate) fn lvgl_init() {
-    if LVGL_INITIALIZED
-        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-        .is_ok()
-    {
+    fn swap_and_check(&self) -> bool {
+        self.0
+            .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    }
+}
+
+static LVGL_INITIALIZED: RunOnce = RunOnce::new();
+
+pub fn init() {
+    if LVGL_INITIALIZED.swap_and_check() {
         unsafe {
             lvgl_sys::lv_init();
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::display::{Display, DrawBuffer};
+
+    pub(crate) fn initialize_test() {
+        init();
+
+        const REFRESH_BUFFER_SIZE: usize = 64 * 64 / 10;
+        static DRAW_BUFFER: DrawBuffer<REFRESH_BUFFER_SIZE> = DrawBuffer::new();
+        static ONCE_INIT: RunOnce = RunOnce::new();
+
+        if ONCE_INIT.swap_and_check() {
+            let _ = Display::register(&DRAW_BUFFER, |_| {}).unwrap();
         }
     }
 }

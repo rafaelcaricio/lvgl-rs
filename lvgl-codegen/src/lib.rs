@@ -1,3 +1,5 @@
+mod analysis;
+
 use inflector::cases::pascalcase::to_pascal_case;
 use lazy_static::lazy_static;
 use proc_macro2::{Ident, TokenStream};
@@ -44,6 +46,12 @@ pub struct LvWidget {
     methods: Vec<LvFunc>,
 }
 
+impl LvWidget {
+    fn pascal_name(&self) -> String {
+        to_pascal_case(&self.name)
+    }
+}
+
 impl Rusty for LvWidget {
     type Parent = ();
 
@@ -53,7 +61,7 @@ impl Rusty for LvWidget {
             return Err(WrapperError::Skip);
         }
 
-        let widget_name = format_ident!("{}", to_pascal_case(self.name.as_str()));
+        let widget_name = format_ident!("{}", self.pascal_name());
         let methods: Vec<TokenStream> = self.methods.iter().flat_map(|m| m.code(self)).collect();
         Ok(quote! {
             define_object!(#widget_name);
@@ -90,6 +98,7 @@ impl Rusty for LvFunc {
     type Parent = LvWidget;
 
     fn code(&self, parent: &Self::Parent) -> WrapperResult<TokenStream> {
+        let widget_name = format_ident!("{}", parent.pascal_name());
         let templ = format!("{}{}_", LIB_PREFIX, parent.name.as_str());
         let new_name = self.name.replace(templ.as_str(), "");
         let func_name = format_ident!("{}", new_name);
@@ -99,12 +108,12 @@ impl Rusty for LvFunc {
         if new_name.as_str().eq("create") {
             return Ok(quote! {
 
-                pub fn new<C>(parent: &mut C) -> crate::LvResult<Self>
-                where
-                    C: crate::NativeObject,
-                {
+                pub fn create(parent: &mut impl crate::NativeObject, copy: Option<&#widget_name>) -> crate::LvResult<Self> {
                     unsafe {
-                        let ptr = lvgl_sys::#original_func_name(parent.raw()?.as_mut(), core::ptr::null_mut());
+                        let ptr = lvgl_sys::#original_func_name(
+                            parent.raw()?.as_mut(),
+                            copy.map(|c| c.raw().unwrap().as_mut() as *mut lvgl_sys::lv_obj_t).unwrap_or(core::ptr::null_mut() as *mut lvgl_sys::lv_obj_t),
+                        );
                         if let Some(raw) = core::ptr::NonNull::new(ptr) {
                             let core = <crate::Obj as crate::Widget>::from_raw(raw);
                             Ok(Self { core })
@@ -112,6 +121,15 @@ impl Rusty for LvFunc {
                             Err(crate::LvError::InvalidReference)
                         }
                     }
+                }
+
+                pub fn create_at(parent: &mut impl crate::NativeObject) -> crate::LvResult<Self> {
+                    Ok(Self::create(parent, None)?)
+                }
+
+                pub fn new() -> crate::LvResult<Self> {
+                    let mut parent = crate::display::DefaultDisplay::get_scr_act()?;
+                    Ok(Self::create_at(&mut parent)?)
                 }
 
             });
@@ -338,6 +356,9 @@ impl Rusty for LvType {
             Some(name) => {
                 let val = if self.is_str() {
                     quote!(&cstr_core::CStr)
+                } else if self.literal_name.contains("lv_") {
+                    let ident = format_ident!("{}", name);
+                    quote!(&#ident)
                 } else {
                     let ident = format_ident!("{}", name);
                     quote!(#ident)
@@ -631,13 +652,12 @@ mod test {
             define_object!(Arc);
 
             impl Arc {
-                pub fn new<C>(parent: &mut C) -> crate::LvResult<Self>
-                where
-                    C: crate::NativeObject,
-                {
-
+                pub fn create(parent: &mut impl crate::NativeObject, copy: Option<&Arc>) -> crate::LvResult<Self> {
                     unsafe {
-                        let ptr = lvgl_sys::lv_arc_create(parent.raw()?.as_mut(), core::ptr::null_mut());
+                        let ptr = lvgl_sys::lv_arc_create(
+                            parent.raw()?.as_mut(),
+                            copy.map(|c| c.raw().unwrap().as_mut() as *mut lvgl_sys::lv_obj_t).unwrap_or(core::ptr::null_mut() as *mut lvgl_sys::lv_obj_t),
+                        );
                         if let Some(raw) = core::ptr::NonNull::new(ptr) {
                             let core = <crate::Obj as crate::Widget>::from_raw(raw);
                             Ok(Self { core })
@@ -645,6 +665,15 @@ mod test {
                             Err(crate::LvError::InvalidReference)
                         }
                     }
+                }
+
+                pub fn create_at(parent: &mut impl crate::NativeObject) -> crate::LvResult<Self> {
+                    Ok(Self::create(parent, None)?)
+                }
+
+                pub fn new() -> crate::LvResult<Self> {
+                    let mut parent = crate::display::DefaultDisplay::get_scr_act()?;
+                    Ok(Self::create_at(&mut parent)?)
                 }
             }
         };
